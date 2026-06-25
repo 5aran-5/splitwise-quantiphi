@@ -170,12 +170,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
-              <Activity className="w-3.5 h-3.5" />
-              Server-Authoritative Computations
-            </span>
-          </div>
+
         </div>
       </header>
 
@@ -198,17 +193,6 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* Informative Guidance Info Callout */}
-        <div id="viva-info-callout" className="bg-gray-800 text-gray-200 rounded-2xl p-4 border border-gray-700 flex gap-3 shadow-sm">
-          <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-          <div className="text-xs space-y-1">
-            <p className="font-semibold text-white">Coding Round Design Highlight:</p>
-            <p className="text-gray-300">
-              This solution implements the exact <b>Splitwise algorithm</b> for debt minimization. All calculation, percentage sum validations, and settlement transactions are compiled <b>exclusively on the backend server</b>. The React frontend operates purely as a clean presentation layer.
-            </p>
-          </div>
-        </div>
 
         {/* Workspace Grid splits: Form Left, Settlement Board Right */}
         <div id="grid-layout" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

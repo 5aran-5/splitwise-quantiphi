@@ -70,12 +70,15 @@ export default function ExpenseList({ expenses, onDelete }: ExpenseListProps) {
 
                   <div className="flex items-center gap-1.5 text-gray-500">
                     <Percent className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="flex gap-2">
-                      {Object.entries(expense.splits).map(([member, pct]) => (
-                        <span key={member}>
-                          {member}: <strong className="text-gray-700">{pct}%</strong>
-                        </span>
-                      ))}
+                    <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+                      {Object.entries(expense.splits).map(([member, pct]) => {
+                        if (pct <= 0) return null;
+                        return (
+                          <span key={member} className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px] font-semibold text-gray-700">
+                            {member}: <span className="text-indigo-600">{pct}%</span>
+                          </span>
+                        );
+                      })}
                     </span>
                   </div>
                 </div>

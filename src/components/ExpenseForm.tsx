@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { PlusCircle, HelpCircle, RefreshCw } from "lucide-react";
+import { PlusCircle, HelpCircle, RefreshCw, X } from "lucide-react";
 
 interface ExpenseFormProps {
   members: string[];
@@ -15,17 +15,42 @@ export default function ExpenseForm({ members, onSubmit }: ExpenseFormProps) {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [payer, setPayer] = useState("Sneha");
+  const [includedMembers, setIncludedMembers] = useState<string[]>(["Amit", "Rahul", "Sneha"]);
   const [splits, setSplits] = useState<{ [member: string]: number }>({
-    Amit: 34,
-    Rahul: 33,
-    Sneha: 33,
+    Amit: 33.34,
+    Rahul: 33.33,
+    Sneha: 33.33,
   });
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Helper to split 100% equally among selected members
+  const performEqualSplit = (included: string[]) => {
+    const n = included.length;
+    if (n === 0) return {};
+
+    const newSplits: { [member: string]: number } = {};
+    
+    // Set excluded members to 0%
+    members.forEach((m) => {
+      newSplits[m] = 0;
+    });
+
+    // Divide 100% equally using basis points for precision
+    const basePct = Math.floor(10000 / n); // 100.00% / n
+    const remainderPct = 10000 % n;
+
+    included.forEach((m, idx) => {
+      const pctCents = basePct + (idx < remainderPct ? 1 : 0);
+      newSplits[m] = pctCents / 100; // e.g. 33.34, 33.33, 33.33
+    });
+
+    return newSplits;
+  };
+
   // Compute live sum of percentages
   const sumOfSliders = (Object.values(splits) as number[]).reduce((sum, val) => sum + val, 0);
-  const isValidSum = Math.abs(sumOfSliders - 100) < 0.01;
+  const isValidSum = Math.abs(sumOfSliders - 100) < 0.05; // Slightly lax tolerance to accommodate input decimals
 
   const handleSliderChange = (member: string, value: number) => {
     setSplits((prev) => ({
@@ -35,12 +60,44 @@ export default function ExpenseForm({ members, onSubmit }: ExpenseFormProps) {
   };
 
   const handleSplitEqually = () => {
-    // 34, 33, 33 sums to exactly 100
-    setSplits({
-      Amit: 34,
-      Rahul: 33,
-      Sneha: 33,
+    const newSplits = performEqualSplit(includedMembers);
+    setSplits(newSplits);
+  };
+
+  const handleToggleMember = (member: string) => {
+    setIncludedMembers((prev) => {
+      let next: string[];
+      if (prev.includes(member)) {
+        if (prev.length <= 1) {
+          return prev; // must have at least one member
+        }
+        next = prev.filter((m) => m !== member);
+      } else {
+        next = [...prev, member];
+      }
+
+      // Auto re-split equally for the new set of included members
+      const newSplits = performEqualSplit(next);
+      setSplits(newSplits);
+
+      return next;
     });
+  };
+
+  const handleAmountChange = (newAmtStr: string) => {
+    setAmount(newAmtStr);
+    const amtNum = parseFloat(newAmtStr) || 0;
+
+    // If splits are currently split equally, keep them split equally
+    const includedValues = includedMembers.map((m) => splits[m] || 0);
+    const minVal = Math.min(...includedValues);
+    const maxVal = Math.max(...includedValues);
+    const isCloseToEqual = includedMembers.length > 0 && (maxVal - minVal) <= 0.05;
+
+    if (isCloseToEqual && includedMembers.length > 0) {
+      const newSplits = performEqualSplit(includedMembers);
+      setSplits(newSplits);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,8 +116,13 @@ export default function ExpenseForm({ members, onSubmit }: ExpenseFormProps) {
       return;
     }
 
+    if (includedMembers.length === 0) {
+      setErrorMsg("At least one member must be included in the split.");
+      return;
+    }
+
     if (!isValidSum) {
-      setErrorMsg(`Splits must sum to exactly 100%. Currently it is ${sumOfSliders}%.`);
+      setErrorMsg(`Splits must sum to exactly 100%. Currently it is ${sumOfSliders.toFixed(2)}%.`);
       return;
     }
 
@@ -72,12 +134,17 @@ export default function ExpenseForm({ members, onSubmit }: ExpenseFormProps) {
       splits,
     });
 
-    setSubmitting(false);
+    setSubmitting(true);
     if (success) {
       setDescription("");
       setAmount("");
       setErrorMsg(null);
+      // Reset splits to default equal
+      const defaultSplits = performEqualSplit(["Amit", "Rahul", "Sneha"]);
+      setSplits(defaultSplits);
+      setIncludedMembers(["Amit", "Rahul", "Sneha"]);
     }
+    setSubmitting(false);
   };
 
   return (
@@ -129,7 +196,7 @@ export default function ExpenseForm({ members, onSubmit }: ExpenseFormProps) {
               min="0.01"
               id="amount"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => handleAmountChange(e.target.value)}
               placeholder="0.00"
               className="w-full pl-7 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition font-medium text-gray-900"
               required
@@ -156,32 +223,114 @@ export default function ExpenseForm({ members, onSubmit }: ExpenseFormProps) {
           </select>
         </div>
 
+        {/* Option: Who all to be included in this split */}
+        <div>
+          <label htmlFor="select-include-member" className="block text-xs font-medium text-gray-700 mb-1">
+            Include in Split (Select to Add/Remove)
+          </label>
+          <select
+            id="select-include-member"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) {
+                handleToggleMember(e.target.value);
+              }
+            }}
+            className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition cursor-pointer"
+          >
+            <option value="" disabled>+ Choose / Toggle a member...</option>
+            {members.map((member) => {
+              const isIncluded = includedMembers.includes(member);
+              return (
+                <option key={member} value={member}>
+                  {member} {isIncluded ? "✓ (Included - Click to Exclude)" : "  (Excluded - Click to Include)"}
+                </option>
+              );
+            })}
+          </select>
+
+          {/* Selected members list underneath */}
+          <div className="mt-2.5">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">Currently Included:</span>
+            <div id="included-members-list" className="flex gap-2 flex-wrap">
+              {members.map((member) => {
+                const isIncluded = includedMembers.includes(member);
+                if (!isIncluded) return null;
+                return (
+                  <button
+                    key={member}
+                    type="button"
+                    id={`btn-include-${member}`}
+                    onClick={() => handleToggleMember(member)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-semibold shadow-2xs transition-all cursor-pointer group"
+                    title={`Click to exclude ${member}`}
+                  >
+                    <span>{member}</span>
+                    <X className="w-3 h-3 text-indigo-400 group-hover:text-rose-600 transition-colors" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         {/* Percentage Sliders Section */}
         <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-4">
           <span className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
             Split Percentages
           </span>
 
-          {members.map((member) => (
-            <div key={member} id={`slider-group-${member}`} className="space-y-1.5">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-medium text-gray-700">{member}</span>
-                <span className="font-mono font-semibold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs">
-                  {splits[member]}%
-                </span>
+          {members.map((member) => {
+            const isIncluded = includedMembers.includes(member);
+            const amtNum = parseFloat(amount) || 0;
+            const memberShare = amtNum > 0 ? ((splits[member] || 0) / 100) * amtNum : 0;
+
+            return (
+              <div key={member} id={`slider-group-${member}`} className={`space-y-1.5 transition-opacity ${!isIncluded ? "opacity-45" : ""}`}>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-medium text-gray-700 flex items-center gap-1.5">
+                    {member}
+                    {isIncluded && amtNum > 0 && (
+                      <span className="text-[10px] text-indigo-600 font-mono bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                        ₹{memberShare.toFixed(2)}
+                      </span>
+                    )}
+                  </span>
+                  
+                  {/* Percentage Input box (Requirement 3: Editable text/number value box) */}
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="any"
+                      id={`input-percentage-${member}`}
+                      value={splits[member] !== undefined ? splits[member] : 0}
+                      disabled={!isIncluded}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        handleSliderChange(member, isNaN(val) ? 0 : val);
+                      }}
+                      className="font-mono font-bold text-gray-900 bg-white w-20 px-1.5 py-0.5 rounded-lg border border-gray-200 shadow-2xs text-right text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                    />
+                    <span className="text-gray-500 font-semibold text-xs">%</span>
+                  </div>
+                </div>
+                
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={splits[member] || 0}
+                  disabled={!isIncluded}
+                  onChange={(e) => handleSliderChange(member, parseFloat(e.target.value) || 0)}
+                  id={`slider-${member}`}
+                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                />
               </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                value={splits[member]}
-                onChange={(e) => handleSliderChange(member, parseInt(e.target.value) || 0)}
-                id={`slider-${member}`}
-                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
-              />
-            </div>
-          ))}
+            );
+          })}
 
           {/* Sum Validator Display */}
           <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between">
@@ -195,7 +344,7 @@ export default function ExpenseForm({ members, onSubmit }: ExpenseFormProps) {
                     : "bg-amber-50 text-amber-700 border border-amber-200"
                 }`}
               >
-                {sumOfSliders}%
+                {sumOfSliders.toFixed(2)}%
               </span>
             </div>
           </div>
@@ -213,8 +362,8 @@ export default function ExpenseForm({ members, onSubmit }: ExpenseFormProps) {
           <div id="validation-warning-box" className="text-xs text-amber-700 bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex items-start gap-2">
             <HelpCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <span>
-              The sum of percentages must be exactly <b>100%</b> (currently it is <b>{sumOfSliders}%</b>).
-              Adjust sliders or click "Split Equally".
+              The sum of percentages must be exactly <b>100%</b> (currently it is <b>{sumOfSliders.toFixed(2)}%</b>).
+              Adjust sliders/inputs or click "Split Equally".
             </span>
           </div>
         )}
